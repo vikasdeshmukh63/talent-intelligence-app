@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Mail, Sparkles, RefreshCw, CheckCircle2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/api/client";
+import { useAppPopup } from "@/components/shared/AppPopupProvider";
 
 const EMAIL_TEMPLATES = {
   "Interview Scheduled": "interview_invite",
@@ -21,6 +22,7 @@ const TEMPLATE_LABELS = {
 };
 
 export default function EmailModal({ candidate, jobTitle, onClose }) {
+  const popup = useAppPopup();
   const defaultTemplate = EMAIL_TEMPLATES[candidate?.status] || "acknowledgement";
   const [template, setTemplate] = useState(defaultTemplate);
   const [emailBody, setEmailBody] = useState("");
@@ -88,11 +90,11 @@ Recruiter, ESDS Software Solutions`,
 
   const handleSend = async () => {
     if (!candidate?.email) {
-      alert("Candidate email is missing.");
+      await popup.alert("Candidate email is missing.");
       return;
     }
     if (!emailBody?.trim()) {
-      alert("Please generate or enter email content first.");
+      await popup.alert("Please generate or enter email content first.");
       return;
     }
     try {
@@ -106,7 +108,7 @@ Recruiter, ESDS Software Solutions`,
       setTimeout(() => onClose(), 1800);
     } catch (error) {
       console.error("Send email failed:", error);
-      alert(error?.message || "Failed to send email.");
+      await popup.alert(error?.message || "Failed to send email.");
     } finally {
       setSending(false);
     }

@@ -17,6 +17,7 @@ import InterviewerDashboardPage from './pages/dashboards/InterviewerDashboardPag
 import { RedirectIfAuth, RequireAuth } from '@/components/auth/RouteGuards';
 import CreateJobPostPage from './pages/jobs/CreateJobPostPage';
 import JobPostViewPage from './pages/jobs/JobPostViewPage';
+import { AppPopupProvider } from "@/components/shared/AppPopupProvider";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -75,9 +76,11 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
-          <Router>
-            <AuthenticatedApp />
-          </Router>
+          <AppPopupProvider>
+            <Router>
+              <AuthenticatedApp />
+            </Router>
+          </AppPopupProvider>
           {globalLoading ? (
             <div className="fixed inset-0 z-[2000] bg-black/20 backdrop-blur-[1px] flex items-center justify-center">
               <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>

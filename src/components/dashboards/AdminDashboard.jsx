@@ -6,18 +6,29 @@ import {
   ShieldCheck, Activity, FileText, TrendingUp, AlertCircle, CheckCircle2,
   Download, ChevronDown
 } from "lucide-react";
-import { store } from "@/lib/dashboardStore";
+import { apiClient } from "@/api/client";
 import LeadsTable from "@/components/shared/LeadsTable";
 import StatCard from "@/components/shared/StatCard";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from "recharts";
 
-const ESDS_LOGO = "/vite.svg";
+const ESDS_LOGO = "/Logo.png";
 
 const COLORS = ["#22d3ee", "#34d399", "#f59e0b", "#f87171", "#818cf8"];
 
 export default function AdminDashboard({ onLogout }) {
   const { theme } = useTheme();
-  const [stats, setStats] = useState(store.getStats());
+  const [stats, setStats] = useState({
+    totalJobs: 0,
+    totalApplicants: 0,
+    shortlisted: 0,
+    interviews: 0,
+    rejected: 0,
+    underReview: 0,
+    avgScore: 0,
+    allCandidates: [],
+    jobs: [],
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [barFilter, setBarFilter] = useState("All");
   const [pieFilter, setPieFilter] = useState("All");
@@ -33,8 +44,37 @@ export default function AdminDashboard({ onLogout }) {
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
 
   useEffect(() => {
-    const unsub = store.subscribe(() => setStats(store.getStats()));
-    return unsub;
+    let mounted = true;
+    (async () => {
+      try {
+        setLoadingStats(true);
+        const { stats: liveStats } = await apiClient.executive.getOverview();
+        if (!mounted || !liveStats || typeof liveStats !== "object") return;
+        setStats({
+          totalJobs: Number(liveStats.totalJobs || 0),
+          totalApplicants: Number(liveStats.totalApplicants || 0),
+          shortlisted: Number(liveStats.shortlisted || 0),
+          interviews: Number(liveStats.interviews || 0),
+          rejected: Number(liveStats.rejected || 0),
+          underReview: Number(liveStats.underReview || 0),
+          avgScore: Number(liveStats.avgScore || 0),
+          allCandidates: Array.isArray(liveStats.allCandidates)
+            ? liveStats.allCandidates.map((candidate) => ({
+                ...candidate,
+                skills: Array.isArray(candidate.skills) ? candidate.skills : [],
+              }))
+            : [],
+          jobs: Array.isArray(liveStats.jobs) ? liveStats.jobs : [],
+        });
+      } catch (error) {
+        console.error("Failed to load admin overview:", error);
+      } finally {
+        if (mounted) setLoadingStats(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const allJobBarData = stats.jobs.map(j => ({
@@ -72,6 +112,14 @@ export default function AdminDashboard({ onLogout }) {
     { label: "Email Service", value: "Operational", status: "ok" },
     { label: "Storage", value: "62% used", status: "warn" },
   ];
+
+  if (loadingStats) {
+    return (
+      <div className="fixed inset-0 bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[1000] bg-background overflow-y-auto">

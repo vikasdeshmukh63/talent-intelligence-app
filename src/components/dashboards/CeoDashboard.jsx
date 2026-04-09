@@ -13,7 +13,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, CartesianGrid, Legend
 } from "recharts";
 
-const ESDS_LOGO = "/vite.svg";
+const ESDS_LOGO = "/Logo.png";
 const COLORS = ["#22d3ee", "#34d399", "#f59e0b", "#f87171", "#818cf8"];
 
 const MONTHLY_HIRING = [

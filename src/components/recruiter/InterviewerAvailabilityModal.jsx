@@ -4,6 +4,7 @@ import { X, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/api/client";
 import { TIME_SLOTS } from "@/components/recruiter/CalendarBookingModal.jsx";
+import { useAppPopup } from "@/components/shared/AppPopupProvider";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -24,6 +25,7 @@ function getWeekDays() {
 }
 
 export default function InterviewerAvailabilityModal({ onClose }) {
+  const popup = useAppPopup();
   const [schedule, setSchedule] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,7 +65,7 @@ export default function InterviewerAvailabilityModal({ onClose }) {
       }
       await refresh();
     } catch (e) {
-      alert(e?.message || "Could not update availability");
+      await popup.alert(e?.message || "Could not update availability");
     }
   };
 

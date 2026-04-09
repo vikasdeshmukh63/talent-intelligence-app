@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/lib/ThemeContext";
 import { apiClient } from "@/api/client";
 
-const ESDS_LOGO = "/vite.svg";
+const ESDS_LOGO = "/Logo.png";
 
 export default function CandidateLoginModal({ onClose, onLogin }) {
   const { theme } = useTheme();

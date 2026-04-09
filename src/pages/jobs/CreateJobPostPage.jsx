@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiClient } from "@/api/client";
+import { useAppPopup } from "@/components/shared/AppPopupProvider";
 
 const SENIORITY_OPTIONS = ["Intern", "Junior", "Mid-level", "Senior", "Lead", "Principal", "Staff"];
 const EMPLOYMENT_OPTIONS = ["Full-time", "Part-time", "Contract", "Internship", "Freelance", "Other"];
@@ -217,6 +218,7 @@ const descriptionFromDraft = (draft) => {
 
 export default function CreateJobPostPage() {
   const navigate = useNavigate();
+  const popup = useAppPopup();
   const fileRef = useRef(null);
   const [file, setFile] = useState(null);
   const [extracting, setExtracting] = useState(false);
@@ -239,7 +241,7 @@ export default function CreateJobPostPage() {
 
       setDraft(normalized);
     } catch (error) {
-      alert(error?.message || "Failed to extract job details from PDF.");
+      await popup.alert(error?.message || "Failed to extract job details from PDF.");
     } finally {
       setExtracting(false);
     }
@@ -256,7 +258,7 @@ export default function CreateJobPostPage() {
       });
       navigate("/dashboard/recruiter");
     } catch (error) {
-      alert(error?.message || "Failed to post job.");
+      await popup.alert(error?.message || "Failed to post job.");
     } finally {
       setSaving(false);
     }

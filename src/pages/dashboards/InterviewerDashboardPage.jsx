@@ -5,7 +5,7 @@ import { useTheme } from "@/lib/ThemeContext";
 import { apiClient } from "@/api/client";
 import InterviewerAvailabilityModal from "@/components/recruiter/InterviewerAvailabilityModal.jsx";
 
-const ESDS_LOGO = "/vite.svg";
+const ESDS_LOGO = "/Logo.png";
 
 export default function InterviewerDashboardPage() {
   const navigate = useNavigate();

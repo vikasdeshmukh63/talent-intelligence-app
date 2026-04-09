@@ -146,7 +146,7 @@ export default function AuthPage() {
         }}
       >
         <div className="text-center mb-1">
-          <img src="/vite.svg" alt="ESDS Logo" className="w-16 h-16 object-contain mx-auto mb-2" />
+          <img src="/Logo.png" alt="ESDS Logo" className="w-16 h-16 object-contain mx-auto mb-2" />
           <h1 className="text-xl font-semibold text-foreground">{roleLabel} · Authentication</h1>
           <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono mt-1">ESDS eNlight Talent Platform</p>
         </div>

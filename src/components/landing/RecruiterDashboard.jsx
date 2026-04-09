@@ -36,8 +36,9 @@ import ScreeningWorkflow from "@/components/recruiter/ScreeningWorkflow.jsx";
 import CalendarBookingModal from "@/components/recruiter/CalendarBookingModal.jsx";
 import InterviewerAvailabilityModal from "@/components/recruiter/InterviewerAvailabilityModal.jsx";
 import ApplicationPipelineGantt from "@/components/shared/ApplicationPipelineGantt.jsx";
+import { useAppPopup } from "@/components/shared/AppPopupProvider";
 
-const ESDS_LOGO = "/vite.svg";
+const ESDS_LOGO = "/Logo.png";
 
 function toYmd(d) {
   const y = d.getFullYear();
@@ -56,6 +57,7 @@ const STATUS_COLORS = {
 export default function RecruiterDashboard({ onLogout, recruiterName = "Recruiter" }) {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const popup = useAppPopup();
   const [activeTab, setActiveTab] = useState("overview");
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
@@ -79,7 +81,7 @@ export default function RecruiterDashboard({ onLogout, recruiterName = "Recruite
         setJobs(Array.isArray(myJobs) ? myJobs : []);
       } catch (error) {
         console.error(error);
-        alert(error?.message || "Failed to load recruiter jobs.");
+        popup.alert(error?.message || "Failed to load recruiter jobs.");
       } finally {
         setLoadingJobs(false);
       }
@@ -217,7 +219,7 @@ Keep it concise and modern. Format with clear sections.`,
       setNewJobTitle(data?.jobTitle || newJobTitle);
     } catch (error) {
       console.error(error);
-      alert(error?.message || "Failed to extract details from PDF.");
+      await popup.alert(error?.message || "Failed to extract details from PDF.");
     } finally {
       setExtractingJd(false);
     }
@@ -235,7 +237,7 @@ Keep it concise and modern. Format with clear sections.`,
       await apiClient.jobs.create({ title, description, details: jdExtracted || null });
     } catch (err) {
       console.error(err);
-      alert(err?.message || "Could not save the job. Please try again.");
+      await popup.alert(err?.message || "Could not save the job. Please try again.");
       return;
     }
     try {
@@ -277,7 +279,7 @@ Keep it concise and modern. Format with clear sections.`,
       }));
     } catch (error) {
       console.error(error);
-      alert(error?.message || "Failed to update status.");
+      await popup.alert(error?.message || "Failed to update status.");
     }
     setOpenStatusDropdown(null);
   };
@@ -302,7 +304,7 @@ Keep it concise and modern. Format with clear sections.`,
         );
       } catch (error) {
         console.error(error);
-        alert(error?.message || "Failed to load candidates for job.");
+        popup.alert(error?.message || "Failed to load candidates for job.");
       } finally {
         setLoadingCandidates(false);
       }
@@ -369,7 +371,10 @@ Keep it concise and modern. Format with clear sections.`,
   };
 
   const handleDeleteJob = async (job) => {
-    const confirmed = window.confirm(`Delete job "${job.title}"? This will also delete all applications for this job.`);
+    const confirmed = await popup.confirm(
+      `Delete job "${job.title}"? This will also delete all applications for this job.`,
+      { title: "Delete job", confirmText: "Delete", cancelText: "Cancel" }
+    );
     if (!confirmed) return;
     try {
       await apiClient.jobs.delete(job.id);
@@ -386,7 +391,7 @@ Keep it concise and modern. Format with clear sections.`,
       }
     } catch (error) {
       console.error(error);
-      alert(error?.message || "Failed to delete job.");
+      await popup.alert(error?.message || "Failed to delete job.");
     }
   };
 
@@ -773,7 +778,7 @@ Keep it concise and modern. Format with clear sections.`,
                         <button
                           onClick={async () => {
                             if (!c.resumeUrl) {
-                              alert("No resume file was attached by this candidate.");
+                              await popup.alert("No resume file was attached by this candidate.");
                               return;
                             }
                             try {
@@ -798,7 +803,7 @@ Keep it concise and modern. Format with clear sections.`,
                               URL.revokeObjectURL(url);
                             } catch (error) {
                               console.error("Resume download failed:", error);
-                              alert("Could not download resume file. Please try again.");
+                              await popup.alert("Could not download resume file. Please try again.");
                             }
                           }}
                           className="flex items-center gap-1.5 text-[11px] font-mono text-green-400 border border-green-400/30 hover:bg-green-400/10 rounded-lg px-3 py-1.5 transition-all"

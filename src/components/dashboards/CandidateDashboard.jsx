@@ -14,13 +14,15 @@ import {
   resumeJobMatchJsonSchema,
 } from "@/lib/resumeJobMatch";
 import ApplicationPipelineGantt from "@/components/shared/ApplicationPipelineGantt.jsx";
+import { useAppPopup } from "@/components/shared/AppPopupProvider";
 
-const ESDS_LOGO = "/vite.svg";
+const ESDS_LOGO = "/Logo.png";
 const COLORS = ["#00B4D8", "#34d399", "#f59e0b", "#f87171", "#818cf8"];
 
 export default function CandidateDashboard({ candidate, onLogout, onProfileUpdate }) {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const popup = useAppPopup();
   const isDark = theme === "dark";
   const [file, setFile] = useState(null);
   const [savedFileUrl, setSavedFileUrl] = useState(null);
@@ -128,7 +130,7 @@ export default function CandidateDashboard({ candidate, onLogout, onProfileUpdat
       }
     } catch (err) {
       console.error(err);
-      alert(err?.message || "Failed to match this resume with open jobs.");
+      await popup.alert(err?.message || "Failed to match this resume with open jobs.");
     }
     setLoading(false);
   };
@@ -163,7 +165,7 @@ export default function CandidateDashboard({ candidate, onLogout, onProfileUpdat
       await runMatching(resumeRecord);
     } catch (err) {
       console.error(err);
-      alert(err?.message || "Failed to upload resume.");
+      await popup.alert(err?.message || "Failed to upload resume.");
       setLoading(false);
     }
   };
@@ -232,7 +234,7 @@ export default function CandidateDashboard({ candidate, onLogout, onProfileUpdat
       const { jobs } = await apiClient.jobs.listOpen();
       const job = (jobs || []).find((j) => j.title === position.title);
       if (!job?.id) {
-        alert("This position is no longer available. Please check back later.");
+        await popup.alert("This position is no longer available. Please check back later.");
         return;
       }
       await apiClient.applications.apply({
@@ -246,17 +248,23 @@ export default function CandidateDashboard({ candidate, onLogout, onProfileUpdat
         subject: `New Application: ${candidate.name} for ${position.title}`,
         body: `Candidate ${candidate.name} (${candidate.email}) has applied for the position of ${position.title}.\n\nAI Match Score: ${position.match}%\n\nTop Skills: ${position.skills.join(", ")}\n\nPlease review and take appropriate action.`
       });
-      alert(`Applied for ${position.title}! Recruiter has been notified.`);
+      await popup.alert(`Applied for ${position.title}! Recruiter has been notified.`, {
+        title: "Application submitted",
+      });
       refreshMyApplications();
     } catch (err) {
       console.error("Error sending notification:", err);
-      alert(err?.message || "Failed to apply. Please try again.");
+      await popup.alert(err?.message || "Failed to apply. Please try again.");
     }
   };
 
   const handleDeleteResume = async () => {
     if (!selectedResume?.url) return;
-    const confirmed = window.confirm("Are you sure you want to delete this resume?");
+    const confirmed = await popup.confirm("Are you sure you want to delete this resume?", {
+      title: "Delete resume",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+    });
     if (!confirmed) return;
     try {
       await apiClient.integrations.Core.DeleteFile({ file_url: selectedResume.url });
@@ -273,7 +281,7 @@ export default function CandidateDashboard({ candidate, onLogout, onProfileUpdat
       }
     } catch (err) {
       console.error("Error deleting resume:", err);
-      alert("Failed to delete resume. Please try again.");
+      await popup.alert("Failed to delete resume. Please try again.");
     }
   };
 
@@ -354,7 +362,7 @@ export default function CandidateDashboard({ candidate, onLogout, onProfileUpdat
                     setEditMode(false);
                   } catch (error) {
                     console.error("Profile update failed:", error);
-                    alert(error.message || "Failed to update profile. Please try again.");
+                    await popup.alert(error.message || "Failed to update profile. Please try again.");
                   } finally {
                     setSavingProfile(false);
                   }

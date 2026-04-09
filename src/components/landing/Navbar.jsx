@@ -3,7 +3,7 @@ import { Sun, Moon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTheme } from "@/lib/ThemeContext";
 
-const ESDS_LOGO = "/vite.svg";
+const ESDS_LOGO = "/Logo.png";
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();

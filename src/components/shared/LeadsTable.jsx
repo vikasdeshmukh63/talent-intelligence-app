@@ -3,15 +3,146 @@ import { motion } from "framer-motion";
 import { Download, CheckCircle2, XCircle, Clock, Users, FileDown, ChevronDown } from "lucide-react";
 import { leadStore } from "@/lib/leadStore";
 import { useTheme } from "@/lib/ThemeContext";
+import { apiClient } from "@/api/client";
+import { useAppPopup } from "@/components/shared/AppPopupProvider";
+
+const APP_STATUS_TO_LEAD_STATUS = {
+  Applied: "pending",
+  "Under Review": "pending",
+  Shortlisted: "accepted",
+  "HR Interview Scheduled": "accepted",
+  Rejected: "rejected",
+};
+
+const LEAD_STATUS_TO_APP_STATUS = {
+  accepted: "Shortlisted",
+  rejected: "Rejected",
+};
+
+const parseUserRole = () => {
+  try {
+    const raw = localStorage.getItem("talent_user");
+    if (!raw) return "";
+    const user = JSON.parse(raw);
+    return user?.role || "";
+  } catch {
+    return "";
+  }
+};
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString("en-IN");
+};
+
+const mapRecruiterCandidateToLead = (candidate, jobTitle) => ({
+  id: `app-${candidate.id}`,
+  applicationId: candidate.id,
+  name: candidate.name || "Candidate",
+  email: candidate.email || "",
+  phone: candidate.phone || "",
+  location: candidate.location || "",
+  topMatch: jobTitle || "—",
+  aiScore: typeof candidate.score === "number" ? candidate.score : 0,
+  submittedAt: formatDate(candidate.appliedAt || candidate.updatedAt),
+  status: APP_STATUS_TO_LEAD_STATUS[candidate.status] || "pending",
+  resumeUrl: candidate.resumeUrl || "",
+  source: "api",
+});
+
+const mapExecutiveCandidateToLead = (candidate) => ({
+  id: `exec-${candidate.id}`,
+  applicationId: candidate.id,
+  name: candidate.name || "Candidate",
+  email: candidate.email || "",
+  phone: "",
+  location: "",
+  topMatch: candidate.jobTitle || "—",
+  aiScore: typeof candidate.score === "number" ? candidate.score : 0,
+  submittedAt: "—",
+  status: APP_STATUS_TO_LEAD_STATUS[candidate.status] || "pending",
+  resumeUrl: "",
+  source: "api",
+});
 
 export default function LeadsTable({ showActions = false }) {
   const { theme } = useTheme();
-  const [leads, setLeads] = useState(leadStore.getLeads());
+  const popup = useAppPopup();
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [periodFilter, setPeriodFilter] = useState("all");
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
 
   useEffect(() => {
-    const unsub = leadStore.subscribe(() => setLeads([...leadStore.getLeads()]));
+    const applyMergedLeads = (apiLeads) => {
+      const localLeads = leadStore.getLeads().map((lead) => ({
+        ...lead,
+        source: lead.source || "local",
+      }));
+      const apiKeys = new Set(
+        (apiLeads || []).map((l) => `${(l.email || "").toLowerCase()}|${l.topMatch || ""}`)
+      );
+      const localOnly = localLeads.filter(
+        (l) => !apiKeys.has(`${(l.email || "").toLowerCase()}|${l.topMatch || ""}`)
+      );
+      const merged = [...(apiLeads || []), ...localOnly];
+      setLeads(merged);
+    };
+
+    const loadLeads = async () => {
+      setLoading(true);
+      try {
+        const role = parseUserRole();
+        if (role === "admin") {
+          const { stats } = await apiClient.executive.getOverview();
+          const execLeads = (stats?.allCandidates || []).map(mapExecutiveCandidateToLead);
+          applyMergedLeads(execLeads);
+          return;
+        }
+
+        const { jobs } = await apiClient.recruiter.listMyJobs();
+        const safeJobs = Array.isArray(jobs) ? jobs : [];
+        const appResponses = await Promise.all(
+          safeJobs.map((job) =>
+            apiClient.recruiter
+              .listApplications(job.id)
+              .catch(() => ({ candidates: [], job: { title: job.title } }))
+          )
+        );
+
+        const apiLeads = appResponses.flatMap((response, idx) => {
+          const title = response?.job?.title || safeJobs[idx]?.title || "—";
+          const candidates = Array.isArray(response?.candidates) ? response.candidates : [];
+          return candidates.map((candidate) => mapRecruiterCandidateToLead(candidate, title));
+        });
+
+        applyMergedLeads(apiLeads);
+      } catch (_error) {
+        applyMergedLeads([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLeads();
+    const unsub = leadStore.subscribe(() => {
+      setLeads((current) => {
+        const localLeads = leadStore.getLeads().map((lead) => ({
+          ...lead,
+          source: lead.source || "local",
+        }));
+        const apiLeads = current.filter((lead) => lead.source === "api");
+        const apiKeys = new Set(
+          apiLeads.map((l) => `${(l.email || "").toLowerCase()}|${l.topMatch || ""}`)
+        );
+        const localOnly = localLeads.filter(
+          (l) => !apiKeys.has(`${(l.email || "").toLowerCase()}|${l.topMatch || ""}`)
+        );
+        return [...apiLeads, ...localOnly];
+      });
+    });
     return unsub;
   }, []);
 
@@ -40,6 +171,57 @@ export default function LeadsTable({ showActions = false }) {
   };
 
   const filteredLeads = getFilteredLeads();
+  const downloadResume = async (lead) => {
+    if (!lead?.resumeUrl) {
+      await popup.alert("No resume file was attached by this candidate.");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("talent_token");
+      const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+      const params = new URLSearchParams({ file_url: lead.resumeUrl });
+      const response = await fetch(`${apiBase}/api/uploads/download?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to download resume (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const extensionGuess = lead.resumeUrl.split("?")[0].split(".").pop()?.toLowerCase() || "pdf";
+      const safeName = (lead.name || "Candidate").replace(/\s+/g, "_");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName}_Resume.${extensionGuess}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Resume download failed:", error);
+      await popup.alert("Could not download resume file. Please try again.");
+    }
+  };
+
+  const updateLeadStatus = async (lead, status) => {
+    if (!LEAD_STATUS_TO_APP_STATUS[status]) return;
+    try {
+      if (lead.applicationId && lead.source === "api") {
+        await apiClient.recruiter.updateApplicationStatus(
+          lead.applicationId,
+          LEAD_STATUS_TO_APP_STATUS[status]
+        );
+      }
+      leadStore.updateStatus(lead.id, status);
+      setLeads((prev) => prev.map((item) => (item.id === lead.id ? { ...item, status } : item)));
+    } catch (error) {
+      await popup.alert(error?.message || "Failed to update lead status.");
+    }
+  };
+
 
   const downloadCSV = () => {
     const rows = [
@@ -124,7 +306,11 @@ export default function LeadsTable({ showActions = false }) {
           </div>
         </div>
 
-      {filteredLeads.length === 0 ? (
+      {loading ? (
+        <div className="text-center py-12 text-muted-foreground font-mono text-xs">
+          Loading candidate leads...
+        </div>
+      ) : filteredLeads.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground font-mono text-xs">
           No candidate leads yet. Leads appear when candidates upload their resume.
         </div>
@@ -152,30 +338,26 @@ export default function LeadsTable({ showActions = false }) {
                   <td className="py-3 pr-4 font-mono text-[10px] text-muted-foreground whitespace-nowrap">{lead.submittedAt}</td>
                   {showActions ? (
                     <td className="py-3 pr-4">
-                      <div className="flex items-center gap-2 pointer-events-none opacity-50">
+                      <div className="flex items-center gap-2">
                         {lead.resumeUrl && (
-                          <a
-                            href={lead.resumeUrl}
-                            download
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => downloadResume(lead)}
                             className="p-1.5 rounded-lg border border-blue-500/40 hover:bg-blue-500/10 transition-all"
                             title="Download Resume"
                           >
                             <FileDown className="w-4 h-4 text-blue-400" />
-                          </a>
+                          </button>
                         )}
                         <button
-                          disabled
-                          onClick={() => leadStore.updateStatus(lead.id, "accepted")}
+                          onClick={() => updateLeadStatus(lead, "accepted")}
                           className={`p-1.5 rounded-lg border transition-all ${lead.status === "accepted" ? "bg-green-500/20 border-green-500/40" : "border-border/30 hover:bg-green-500/10 hover:border-green-500/40"}`}
                           title="Accept"
                         >
                           <CheckCircle2 className="w-4 h-4 text-green-400" />
                         </button>
                         <button
-                          disabled
-                          onClick={() => leadStore.updateStatus(lead.id, "rejected")}
+                          onClick={() => updateLeadStatus(lead, "rejected")}
                           className={`p-1.5 rounded-lg border transition-all ${lead.status === "rejected" ? "bg-red-500/20 border-red-500/40" : "border-border/30 hover:bg-red-500/10 hover:border-red-500/40"}`}
                           title="Reject"
                         >
