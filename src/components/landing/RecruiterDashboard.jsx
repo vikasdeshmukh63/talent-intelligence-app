@@ -467,14 +467,30 @@ Keep it concise and modern. Format with clear sections.`,
         {/* Board Tab */}
          {activeTab === "board" && (
            <div>
-             {/* Job selector */}
-             <div className="flex gap-1 sm:gap-2 mb-4 sm:mb-5 flex-wrap">
-               {jobs.map(job => (
-                 <button key={job.id} onClick={() => setSelectedJob(job)}
-                   className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${selectedJob?.id === job.id ? `bg-primary/20 border-primary text-primary ${theme === 'light' ? 'border-2 border-blue-900/40' : 'border'}` : `border-border/40 text-muted-foreground hover:border-primary/40 ${theme === 'light' ? 'border-2 border-blue-900/40' : 'border'}`}`}>
-                  {job.title}
-                </button>
-              ))}
+            {/* Job selector */}
+            <div className="mb-4 sm:mb-5">
+              <div className={`font-mono text-[10px] uppercase tracking-wider mb-2 ${theme === 'light' ? 'text-gray-700' : 'text-muted-foreground'}`}>
+                Select Job Post
+              </div>
+              <select
+                value={selectedJob?.id || ""}
+                onChange={(e) => {
+                  const selectedId = Number(e.target.value);
+                  const selected = jobs.find((j) => j.id === selectedId) || null;
+                  setSelectedJob(selected);
+                }}
+                className={`w-full sm:w-[420px] rounded-lg border bg-background/60 px-3 py-2 text-xs sm:text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring ${
+                  theme === "light" ? "border-blue-900/40 text-gray-900" : "border-border/40 text-foreground"
+                }`}
+              >
+                {!jobs.length && <option value="">No job posts available</option>}
+                {!!jobs.length && <option value="">Select a job post</option>}
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.title}
+                  </option>
+                ))}
+              </select>
             </div>
             {selectedJob ? (
               <KanbanBoard
