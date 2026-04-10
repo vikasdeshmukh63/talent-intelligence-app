@@ -33,13 +33,18 @@ const request = async (path, options = {}) => {
     const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
     if (!response.ok) {
       let message = `Request failed with status ${response.status}`;
+      let code;
       try {
         const err = await response.json();
         if (err?.message) message = err.message;
+        if (err?.code) code = err.code;
       } catch (_error) {
         // ignore parse errors
       }
-      throw new Error(message);
+      const error = new Error(message);
+      if (code) error.code = code;
+      error.status = response.status;
+      throw error;
     }
     return response.json();
   } finally {
@@ -226,10 +231,16 @@ export const apiClient = {
         return data;
       },
       async SendEmail(payload) {
+        const { to, subject, body, includeSignature } = payload;
         return request("/api/ai/email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            to,
+            subject,
+            body,
+            ...(includeSignature === false ? { includeSignature: false } : {}),
+          }),
         });
       },
       async DeleteFile({ file_url }) {

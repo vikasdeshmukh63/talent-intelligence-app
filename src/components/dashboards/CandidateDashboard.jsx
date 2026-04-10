@@ -246,7 +246,8 @@ export default function CandidateDashboard({ candidate, onLogout, onProfileUpdat
       await apiClient.integrations.Core.SendEmail({
         to: "priya.mehta@esds.co.in",
         subject: `New Application: ${candidate.name} for ${position.title}`,
-        body: `Candidate ${candidate.name} (${candidate.email}) has applied for the position of ${position.title}.\n\nAI Match Score: ${position.match}%\n\nTop Skills: ${position.skills.join(", ")}\n\nPlease review and take appropriate action.`
+        body: `Candidate ${candidate.name} (${candidate.email}) has applied for the position of ${position.title}.\n\nAI Match Score: ${position.match}%\n\nTop Skills: ${position.skills.join(", ")}\n\nPlease review and take appropriate action.`,
+        includeSignature: false,
       });
       await popup.alert(`Applied for ${position.title}! Recruiter has been notified.`, {
         title: "Application submitted",

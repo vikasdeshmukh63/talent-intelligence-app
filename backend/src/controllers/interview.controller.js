@@ -4,6 +4,10 @@ import { InterviewerBusySlot } from "../models/interviewer-busy-slot.model.js";
 import { InterviewBooking } from "../models/interview-booking.model.js";
 import { Application } from "../models/application.model.js";
 import { sendMail } from "../services/mail.service.js";
+import {
+  buildInterviewCandidateEmailHtml,
+  buildInterviewHostEmailHtml,
+} from "../services/mail-templates.js";
 import { sequelize } from "../config/database.js";
 import { createTeamsOnlineMeeting } from "../services/teams.service.js";
 
@@ -240,9 +244,6 @@ export const createInterviewBooking = async (req, res) => {
 
   const safeBody = String(emailBody || "").trim();
   const hostNames = hosts.map((h) => h.name).join(", ");
-  const meetingLine = teams?.joinUrl
-    ? `<p><strong>Microsoft Teams:</strong> <a href="${teams.joinUrl}">Join meeting</a></p>`
-    : "";
   const safeBodyHtml =
     safeBody.length > 0
       ? safeBody
@@ -251,39 +252,38 @@ export const createInterviewBooking = async (req, res) => {
           .replace(/>/g, "&gt;")
           .replace(/\n/g, "<br/>")
       : "";
-  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;font-size:14px;color:#0f172a;">
-    ${
-      safeBodyHtml
-        ? `<div>${safeBodyHtml}</div>`
-        : `<p>Hello ${payloadBase.candidateName},</p>
-           <p>Your interview for <strong>${payloadBase.jobTitle}</strong> is scheduled on <strong>${payloadBase.scheduledDate}</strong> at <strong>${payloadBase.timeSlot}</strong> (IST) with <strong>${hostNames}</strong>.</p>`
-    }
-    ${meetingLine}
-    <p>Best regards,<br/>eNlight Talent</p>
-  </div>`;
+  const candidateHtml = buildInterviewCandidateEmailHtml({
+    candidateName: payloadBase.candidateName,
+    jobTitle: payloadBase.jobTitle,
+    scheduledDate: payloadBase.scheduledDate,
+    timeSlot: payloadBase.timeSlot,
+    hostNames,
+    customBodyHtml: safeBodyHtml ? `<div>${safeBodyHtml}</div>` : undefined,
+    teamsJoinUrl: teams?.joinUrl || null,
+  });
 
   await sendMail({
     to: candidateEmailNorm,
     subject: `Interview scheduled — ${payloadBase.jobTitle}`,
-    html,
+    html: candidateHtml,
   });
 
   try {
     for (const h of hosts) {
+      const hostHtml = buildInterviewHostEmailHtml({
+        hostName: h.name,
+        jobTitle: payloadBase.jobTitle,
+        scheduledDate: payloadBase.scheduledDate,
+        timeSlot: payloadBase.timeSlot,
+        candidateName: payloadBase.candidateName,
+        candidateEmail: candidateEmailNorm,
+        hostNames,
+        teamsJoinUrl: teams?.joinUrl || null,
+      });
       await sendMail({
         to: h.email,
         subject: `Interview booked — ${payloadBase.jobTitle}`,
-        html: `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;">
-        <p>Hi ${h.name},</p>
-        <p>A recruiter scheduled an interview on your calendar:</p>
-        <ul>
-          <li><strong>When:</strong> ${payloadBase.scheduledDate} at ${payloadBase.timeSlot} (IST)</li>
-          <li><strong>Candidate:</strong> ${payloadBase.candidateName} (${candidateEmailNorm})</li>
-          <li><strong>Role:</strong> ${payloadBase.jobTitle}</li>
-          <li><strong>Hosts:</strong> ${hostNames}</li>
-        </ul>
-        ${meetingLine}
-      </div>`,
+        html: hostHtml,
       });
     }
   } catch (_e) {

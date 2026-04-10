@@ -21,7 +21,7 @@ const TEMPLATE_LABELS = {
   rejection: "Rejection Notice",
 };
 
-export default function EmailModal({ candidate, jobTitle, onClose }) {
+export default function EmailModal({ candidate, jobTitle, senderName = "Recruiter", onClose }) {
   const popup = useAppPopup();
   const defaultTemplate = EMAIL_TEMPLATES[candidate?.status] || "acknowledgement";
   const [template, setTemplate] = useState(defaultTemplate);
@@ -32,56 +32,53 @@ export default function EmailModal({ candidate, jobTitle, onClose }) {
 
   const generateEmail = async () => {
     setGenerating(true);
+    const signOffRule = `Do NOT include "Best regards", "Sincerely", your name, or any closing signature — the platform will add the real sender name automatically after you send.`;
+    const voice = `You are ${senderName}, writing on behalf of ESDS.`;
     const prompts = {
-      interview_invite: `Write a warm, professional email body for ${candidate.name} invited to interview for "${jobTitle}".
+      interview_invite: `${voice}
+
+Write a warm, professional email body for ${candidate.name} invited to interview for "${jobTitle}".
 Requirements:
 - Plain text only, no markdown.
 - Do NOT include "Subject:".
 - Keep 4-6 short paragraphs with clear line breaks.
 - Mention AI match score ${candidate.score}% and key skills: ${candidate.skills.join(", ")}.
 - Include placeholder: [Insert date/time].
-- End with:
-Best regards,
-Priya Mehta
-Recruiter, ESDS Software Solutions`,
-      shortlist: `Write a congratulatory email body to ${candidate.name} for being shortlisted for "${jobTitle}" at ESDS.
+- ${signOffRule}`,
+      shortlist: `${voice}
+
+Write a congratulatory email body to ${candidate.name} for being shortlisted for "${jobTitle}" at ESDS.
 Requirements:
 - Plain text only, no markdown.
 - Do NOT include "Subject:".
 - Use 3-5 short paragraphs with line breaks.
 - Mention relevant strengths from skills: ${candidate.skills.join(", ")}.
-- End with:
-Best regards,
-Priya Mehta
-Recruiter, ESDS Software Solutions`,
-      acknowledgement: `Write an application acknowledgement email body to ${candidate.name} for "${jobTitle}".
+- ${signOffRule}`,
+      acknowledgement: `${voice}
+
+Write an application acknowledgement email body to ${candidate.name} for "${jobTitle}".
 Requirements:
 - Plain text only, no markdown.
 - Do NOT include "Subject:".
 - Keep concise, 3-4 short paragraphs.
-- End with:
-Best regards,
-Priya Mehta
-Recruiter, ESDS Software Solutions`,
-      under_review: `Write a status update email body for ${candidate.name} that their "${jobTitle}" application is under review.
+- ${signOffRule}`,
+      under_review: `${voice}
+
+Write a status update email body for ${candidate.name} that their "${jobTitle}" application is under review.
 Requirements:
 - Plain text only, no markdown.
 - Do NOT include "Subject:".
 - Keep concise, 3-4 short paragraphs.
-- End with:
-Best regards,
-Priya Mehta
-Recruiter, ESDS Software Solutions`,
-      rejection: `Write a respectful rejection email body for ${candidate.name} for "${jobTitle}".
+- ${signOffRule}`,
+      rejection: `${voice}
+
+Write a respectful rejection email body for ${candidate.name} for "${jobTitle}".
 Requirements:
 - Plain text only, no markdown.
 - Do NOT include "Subject:".
 - Keep empathetic and concise, 3-4 short paragraphs.
 - Encourage future applications.
-- End with:
-Best regards,
-Priya Mehta
-Recruiter, ESDS Software Solutions`,
+- ${signOffRule}`,
     };
     const res = await apiClient.integrations.Core.InvokeLLM({ prompt: prompts[template] });
     setEmailBody(res);

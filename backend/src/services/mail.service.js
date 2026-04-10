@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { env } from "../config/env.js";
+import { buildOtpEmailHtml } from "./mail-templates.js";
 
 const transporter =
   env.smtpHost && env.smtpUser && env.smtpPass
@@ -11,7 +12,7 @@ const transporter =
       })
     : null;
 
-export const sendMail = async ({ to, subject, html }) => {
+export const sendMail = async ({ to, subject, html, text }) => {
   if (!transporter) {
     console.warn(`[mail] SMTP not configured — email not sent (would have gone to: ${to}, subject: ${subject})`);
     return;
@@ -21,6 +22,7 @@ export const sendMail = async ({ to, subject, html }) => {
     to,
     subject,
     html,
+    ...(text ? { text } : {}),
   });
   console.log(`[mail] Sent email to ${to} — subject: "${subject}"`);
 };
@@ -28,13 +30,19 @@ export const sendMail = async ({ to, subject, html }) => {
 export const sendOtpEmail = async ({ email, otp, purpose }) => {
   const subject =
     purpose === "verify" ? "Verify your eNlight account" : "Reset your eNlight password";
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height:1.5">
-      <h2>eNlight Talent Intelligence</h2>
-      <p>Your one-time password is:</p>
-      <p style="font-size:24px;font-weight:700;letter-spacing:4px">${otp}</p>
-      <p>This OTP expires in 10 minutes.</p>
-    </div>
-  `;
-  await sendMail({ to: email, subject, html });
+  const html = buildOtpEmailHtml({ otp, purpose });
+  const purposeLine =
+    purpose === "verify"
+      ? "Use this code to verify your email address."
+      : "Use this code to reset your password.";
+  const text = [
+    "eNlight Talent Intelligence",
+    "",
+    purposeLine,
+    "",
+    `Your code: ${otp}`,
+    "",
+    "This code expires in 10 minutes. If you did not request this, ignore this email.",
+  ].join("\n");
+  await sendMail({ to: email, subject, html, text });
 };

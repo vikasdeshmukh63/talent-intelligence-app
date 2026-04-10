@@ -41,6 +41,17 @@ export const signup = async (req, res) => {
     if (!ok) return res.status(409).json({ message: "User already exists with different password" });
     const currentRoles = getUserRoles(existing);
     if (currentRoles.includes(role)) {
+      if (!existing.emailVerified) {
+        const otp = createOtp();
+        existing.emailOtp = otp;
+        existing.emailOtpExpiresAt = otpExpiry();
+        await existing.save();
+        await sendOtpEmail({ email: existing.email, otp, purpose: "verify" });
+        return res.status(200).json({
+          requiresEmailVerification: true,
+          message: "Email not verified. A new verification code was sent to your inbox.",
+        });
+      }
       return res.status(409).json({ message: "User already registered with this role" });
     }
     existing.additionalRoles = [...new Set([...(Array.isArray(existing.additionalRoles) ? existing.additionalRoles : []), role])];
@@ -51,9 +62,15 @@ export const signup = async (req, res) => {
       existing.emailOtpExpiresAt = otpExpiry();
       await existing.save();
       await sendOtpEmail({ email: existing.email, otp, purpose: "verify" });
-      return res.status(200).json({ message: "Role added. Verify OTP sent to email." });
+      return res.status(200).json({
+        requiresEmailVerification: true,
+        message: "Role added. Verify OTP sent to email.",
+      });
     }
-    return res.status(200).json({ message: "Role added to existing account. Please login." });
+    return res.status(200).json({
+      requiresEmailVerification: false,
+      message: "Role added to existing account. Please login.",
+    });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -70,7 +87,10 @@ export const signup = async (req, res) => {
     emailOtpExpiresAt: otpExpiry(),
   });
   await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
-  return res.status(201).json({ message: "Registration successful. Verify OTP sent to email." });
+  return res.status(201).json({
+    requiresEmailVerification: true,
+    message: "Registration successful. Verify OTP sent to email.",
+  });
 };
 
 export const login = async (req, res) => {
@@ -84,7 +104,10 @@ export const login = async (req, res) => {
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return res.status(401).json({ message: "Invalid credentials" });
   if (!user.emailVerified) {
-    return res.status(403).json({ message: "Email not verified. Please verify OTP." });
+    return res.status(403).json({
+      message: "Email not verified. Please verify OTP.",
+      code: "EMAIL_NOT_VERIFIED",
+    });
   }
 
   const activeRole = role || user.role;

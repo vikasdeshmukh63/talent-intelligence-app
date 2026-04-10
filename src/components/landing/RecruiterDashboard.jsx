@@ -928,6 +928,7 @@ Keep it concise and modern. Format with clear sections.`,
         <EmailModal
           candidate={activeCandidate}
           jobTitle={selectedJob?.title}
+          senderName={recruiterName}
           onClose={() => { setShowEmailModal(false); setActiveCandidate(null); }}
         />
       )}

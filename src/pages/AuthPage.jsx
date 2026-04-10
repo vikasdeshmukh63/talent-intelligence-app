@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "@/api/client";
 import { useTheme } from "@/lib/ThemeContext";
-import { Sparkles, ArrowRight, Mail, Lock, User, KeyRound } from "lucide-react";
+import { Sparkles, ArrowRight, Mail, Lock, User, KeyRound, Eye, EyeOff } from "lucide-react";
 
 const roleMap = {
   candidate: "candidate",
@@ -42,6 +42,38 @@ export default function AuthPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [info, setInfo] = useState("");
+  /** Why we opened the verify step: resend OTP when coming from login with unverified email */
+  const verifyIntentRef = useRef("");
+
+  useEffect(() => {
+    if (step !== "verify") return;
+    const email = form.email?.trim();
+    if (!email) return;
+    const intent = verifyIntentRef.current;
+    verifyIntentRef.current = "";
+    if (intent !== "login-unverified") return;
+    let active = true;
+    setLoading(true);
+    setError("");
+    apiClient.auth
+      .resendVerifyOtp({ email })
+      .then(() => {
+        if (active) setInfo("A new verification code was sent to your email.");
+      })
+      .catch((e) => {
+        if (active) setError(e.message || "Could not send verification code.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [step, form.email]);
 
   const redirectByRole = (userRole) => {
     const map = {
@@ -56,6 +88,7 @@ export default function AuthPage() {
 
   const submitAuth = async () => {
     setError("");
+    setInfo("");
     if (!form.email || !form.password) return;
     if (mode === "signup" && form.password !== form.confirmPassword) {
       setError("Passwords do not match.");
@@ -64,19 +97,38 @@ export default function AuthPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        await apiClient.auth.signup({
+        const data = await apiClient.auth.signup({
           name: form.name || "User",
           email: form.email,
           password: form.password,
           role,
         });
-        setStep("verify");
+        if (data?.requiresEmailVerification) {
+          verifyIntentRef.current = "signup";
+          setForm((f) => ({ ...f, otp: "" }));
+          setStep("verify");
+          setInfo("Check your email for a verification code.");
+        } else {
+          setMode("login");
+          setInfo(data?.message || "You can sign in now.");
+        }
       } else {
         const user = await apiClient.auth.login({ email: form.email, password: form.password, role });
         redirectByRole(user.role);
       }
     } catch (e) {
-      setError(e.message || "Authentication failed");
+      const isUnverified =
+        e?.code === "EMAIL_NOT_VERIFIED" ||
+        (e?.status === 403 && String(e?.message || "").toLowerCase().includes("email not verified"));
+      if (isUnverified && mode === "login") {
+        verifyIntentRef.current = "login-unverified";
+        setForm((f) => ({ ...f, otp: "" }));
+        setStep("verify");
+        setError("");
+        setInfo("");
+      } else {
+        setError(e.message || "Authentication failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -85,6 +137,7 @@ export default function AuthPage() {
   const submitVerify = async () => {
     setLoading(true);
     setError("");
+    setInfo("");
     try {
       const user = await apiClient.auth.verifyEmailOtp({ email: form.email, otp: form.otp });
       redirectByRole(user.role);
@@ -181,7 +234,11 @@ export default function AuthPage() {
               {["login", "signup"].map((m) => (
                 <button
                   key={m}
-                  onClick={() => setMode(m)}
+                  onClick={() => {
+                    setMode(m);
+                    setInfo("");
+                    setError("");
+                  }}
                   className="flex-1 py-2 rounded-lg text-xs font-mono uppercase tracking-wider transition-all"
                   style={mode === m ? { background: theme === "light" ? "#003d82" : "hsl(220,80%,30%)", color: "#fff" } : {}}
                 >
@@ -200,13 +257,43 @@ export default function AuthPage() {
               <input className="w-full border rounded-lg p-2 pl-9 bg-background/40" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input className="w-full border rounded-lg p-2 pl-9 bg-background/40" type="password" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                className="w-full border rounded-lg p-2 pl-9 pr-10 bg-background/40"
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                onClick={() => setShowPassword((v) => !v)}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
             {mode === "signup" && (
               <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input className="w-full border rounded-lg p-2 pl-9 bg-background/40" type="password" placeholder="Confirm password" value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} />
+                <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <input
+                  className="w-full border rounded-lg p-2 pl-9 pr-10 bg-background/40"
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm password"
+                  autoComplete="new-password"
+                  value={form.confirmPassword}
+                  onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                />
+                <button
+                  type="button"
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             )}
             <button className="w-full rounded-lg p-2 text-white text-sm flex items-center justify-center gap-2" style={{ background: theme === "light" ? "#003d82" : "hsl(220,80%,30%)" }} onClick={submitAuth} disabled={loading}>
@@ -223,12 +310,42 @@ export default function AuthPage() {
         )}
         {step === "verify" && (
           <>
+            <p className="text-sm text-muted-foreground font-mono">
+              Enter the code sent to <span className="text-foreground">{form.email}</span>
+            </p>
             <div className="relative">
               <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input className="w-full border rounded-lg p-2 pl-9 bg-background/40" placeholder="OTP" value={form.otp} onChange={(e) => setForm({ ...form, otp: e.target.value })} />
             </div>
             <button className="w-full rounded-lg p-2 text-white text-sm flex items-center justify-center gap-2" style={{ background: theme === "light" ? "#003d82" : "hsl(220,80%,30%)" }} onClick={submitVerify} disabled={loading}>{loading ? "Please wait..." : "Verify Email OTP"} <Sparkles className="w-4 h-4" /></button>
-            <button className="text-xs underline text-primary" onClick={() => apiClient.auth.resendVerifyOtp({ email: form.email })}>Resend OTP</button>
+            <button
+              type="button"
+              className="text-xs underline text-primary"
+              onClick={async () => {
+                setError("");
+                setInfo("");
+                try {
+                  await apiClient.auth.resendVerifyOtp({ email: form.email });
+                  setInfo("A new verification code was sent.");
+                } catch (err) {
+                  setError(err.message || "Resend failed");
+                }
+              }}
+            >
+              Resend OTP
+            </button>
+            <button
+              type="button"
+              className="text-xs underline text-muted-foreground block w-full text-center"
+              onClick={() => {
+                verifyIntentRef.current = "";
+                setStep("auth");
+                setInfo("");
+                setError("");
+              }}
+            >
+              Back to sign in
+            </button>
           </>
         )}
         {(step === "forgot" || step === "reset") && (
@@ -244,14 +361,30 @@ export default function AuthPage() {
                   <input className="w-full border rounded-lg p-2 pl-9 bg-background/40" placeholder="OTP" value={form.otp} onChange={(e) => setForm({ ...form, otp: e.target.value })} />
                 </div>
                 <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input className="w-full border rounded-lg p-2 pl-9 bg-background/40" type="password" placeholder="New password" value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} />
+                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input
+                    className="w-full border rounded-lg p-2 pl-9 pr-10 bg-background/40"
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="New password"
+                    autoComplete="new-password"
+                    value={form.newPassword}
+                    onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                    onClick={() => setShowNewPassword((v) => !v)}
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </>
             )}
             <button className="w-full rounded-lg p-2 text-white text-sm" style={{ background: theme === "light" ? "#003d82" : "hsl(220,80%,30%)" }} onClick={submitForgot} disabled={loading}>{loading ? "Please wait..." : step === "forgot" ? "Send Reset OTP" : "Reset Password"}</button>
           </>
         )}
+        {info && <p className="text-sm text-primary/90">{info}</p>}
         {error && <p className="text-sm text-red-500">{error}</p>}
         {step !== "auth" && (
           <div className="pt-1 flex justify-center">
